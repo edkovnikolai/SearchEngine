@@ -1,4 +1,4 @@
-# from bs4 import BeautifulSoup
+from bs4 import BeautifulSoup
 import requests
 
 main_page_url = "https://www.stlawu.edu/current-students"
@@ -10,6 +10,14 @@ headers = {
 }
 
 response = requests.get(main_page_url, headers=headers)
-print(response.text)
+# print(response.text)
 
-# soup = BeautifulSoup(html_doc, 'html.parser')
+soup = BeautifulSoup(response.text, 'html.parser')
+
+anchors = soup.find_all('a')
+links = []
+
+for anchor in anchors:
+    links.append(anchor.get('href'))
+
+print(*links)
