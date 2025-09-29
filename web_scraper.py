@@ -1,3 +1,7 @@
+"""
+Scrape the website and create a dataset with urls and html documents
+"""
+
 from typing import List
 
 from bs4 import BeautifulSoup
@@ -120,16 +124,19 @@ def save_data():
         html_doc = response.text
 
         # extracting the long background text
-        soup = BeautifulSoup(html_doc, 'html.parser')
-        bg_text_div = soup.find(class_="feature-words__inner")
-        if bg_text_div is not None:
-            bg_text_div.extract()
+        try:
+            soup = BeautifulSoup(html_doc, 'html.parser')
+            bg_text_div = soup.find(class_="feature-words__inner")
+            if bg_text_div is not None:
+                bg_text_div.extract()
 
-        # extracting all scripts
-        scripts = soup.find_all('script')
-        for script in scripts:
-            script.extract()
-        html_doc = soup.prettify()
+            # extracting all scripts
+            scripts = soup.find_all('script')
+            for script in scripts:
+                script.extract()
+            html_doc = soup.prettify()
+        except:
+            continue
 
         row = {'url': link, 'html_doc': html_doc}
         rows.append(row)
