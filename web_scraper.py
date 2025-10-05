@@ -75,14 +75,7 @@ def get_all_legible_links(url: str) -> List[str]:
     finally:
         return legible_links
 
-# all stlawu links
-all_links = {main_page_url, search_url}
 
-# maximum number of links
-_link_maximum = 20000
-
-# progress bar
-pb = tqdm(desc="web scrapping", total=_link_maximum)
 
 def scrape_website():
     """
@@ -106,7 +99,7 @@ def scrape_website():
         i += 1
         pb.update(n=added_cnt)
 
-scrape_website()
+
 
 # saving it as a json via pandas DataFrame
 def save_data():
@@ -144,7 +137,18 @@ def save_data():
     df = DataFrame(data=rows)
     df.to_json('stlawu-webpages.jsonl', orient='records', lines=True)
 
-save_data()
+if __name__ == '__main__':
+    # all stlawu links
+    all_links = {main_page_url, search_url}
+
+    # maximum number of links
+    _link_maximum = 20000
+
+    # progress bar
+    pb = tqdm(desc="web scrapping", total=_link_maximum)
+
+    scrape_website()
+    save_data()
 
 
 
