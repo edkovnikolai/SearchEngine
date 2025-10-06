@@ -2,3 +2,6 @@ venv
 secret_token
 stlawu-webpages.jsonl
 stlawu-webpages-clean
+.ipynb_checkpoints
+*.out
+*.err

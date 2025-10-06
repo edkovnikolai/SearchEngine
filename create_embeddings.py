@@ -2,12 +2,14 @@
 Use the model to embed the tokens and save it to the final dataset
 """
 
-from transformers import AutoTokenizer, AutoModel
+from transformers import AutoTokenizer, AutoModel, BitsAndBytesConfig
 from datasets import load_from_disk, Dataset
 from html_cleaner import clean_dataset_path
+import torch
+from tqdm.auto import tqdm
 
 # where to save the database
-embeddings_dataset_path = "stlawu-webpages-embeddings"
+embeddings_dataset_path = "stlawu-webpages-with-embeddings"
 
 def cls_pooling(model_output):
     """
@@ -26,10 +28,15 @@ def get_embeddings(text: str):
     encoded_input = tokenizer(
         text, padding='max_length', truncation=True, return_tensors="pt", max_length=model.max_seq_length
     )
-    # TODO: Later do it for the GPU
     encoded_input = {k: v.to(device) for k, v in encoded_input.items()}
-    model_output = model(**encoded_input)
-    return cls_pooling(model_output)
+
+    # DEBUG:
+    # print(torch.cuda.memory_summary(device=None, abbreviated=False))
+
+    # disabling gradient calculations
+    with torch.no_grad():
+        model_output = model(**encoded_input)
+    return {'embeddings': cls_pooling(model_output)}
 
 def batched_embeddings(rows):
     """
@@ -38,8 +45,8 @@ def batched_embeddings(rows):
     :return:
     """
     embeds = []
-    for i in range(len(rows)):
-        embeds.append(get_embeddings(rows['html_doc'][i]))
+    for i in range(len(rows['html_doc'])):
+        embeds.append(get_embeddings(rows['html_doc'][i])['embeddings'])
     return {'embeddings': embeds}
 
 
@@ -47,34 +54,67 @@ def batched_embeddings(rows):
 
 if __name__ == '__main__':
 
+    # getting device to use for calculations
+    if torch.cuda.is_available():
+        device = torch.device("cuda")
+        print("Using CUDA")
+    else:
+        device = torch.device("cpu")
+        print("Using CPU")
+
+    print(torch.cuda.get_device_properties(0).total_memory / 1024 ** 3)
+
+    # Utilizing quantization due to limited GPU memory
+    quantization_config = BitsAndBytesConfig(
+        load_in_8bit=True
+    )
+
     # downloading and using the model
     model_ckpt = "intfloat/e5-mistral-7b-instruct"
     tokenizer = AutoTokenizer.from_pretrained(model_ckpt)
-    model = AutoModel.from_pretrained(model_ckpt)
+    model = AutoModel.from_pretrained(
+        model_ckpt,
+        quantization_config=quantization_config,
+        device_map="auto"
+    )
 
     # model tokens max length
-    model.max_seq_length = 4096
+    model.max_seq_length = 2 * 4096
+
+    # loading model to device
+    # NO NEED TO DO IT WITH bitsandbytes MODELS
+    # model.to(device)
+
+
 
     clean_dataset = load_from_disk(clean_dataset_path)
 
-    # creating token embeddings
-    # TODO Do it on GPU
-    # embeddings = clean_dataset.map(
-    #     batched_embeddings,
-    #     batched=True,
-    #     batch_size=10
-    # )
+    # FIXME remove this debug thing
+    # clean_dataset = clean_dataset.select(range(64))
 
+    # creating token embeddings
     embeddings = clean_dataset.map(
-        lambda x: get_embeddings(x['html_doc']),
-        num_proc=10
+        batched_embeddings,
+        batched=True,
+        batch_size=64,
     )
 
-    # adding faiss index
-    embeddings.add_faiss_index(column='embeddings')
+
+    # Old version
+    # embeddings = clean_dataset.map(
+    #     lambda x: get_embeddings(x['html_doc'])
+    # )
 
     # saving to the disk
     embeddings.save_to_disk(embeddings_dataset_path)
+
+    # THE FOLLOWING CODE CRASHES. FOR NOW JUST DO EMBEDDINGS
+
+    # adding faiss index
+    # embeddings.add_faiss_index(column='embeddings')
+
+    # saving to the disk
+    # embeddings.save_to_disk(embeddings_dataset_path)
 
 
 
