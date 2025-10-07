@@ -3,7 +3,7 @@ Use the model to embed the tokens and save it to the final dataset
 """
 
 from transformers import AutoTokenizer, AutoModel, BitsAndBytesConfig
-from datasets import load_from_disk, Dataset
+from datasets import load_from_disk
 from html_cleaner import clean_dataset_path
 import torch
 from tqdm.auto import tqdm
@@ -36,7 +36,7 @@ def get_embeddings(text: str):
     # disabling gradient calculations
     with torch.no_grad():
         model_output = model(**encoded_input)
-    return {'embeddings': cls_pooling(model_output)}
+    return {'embeddings': cls_pooling(model_output)[0]}
 
 def batched_embeddings(rows):
     """
@@ -89,8 +89,6 @@ if __name__ == '__main__':
 
     clean_dataset = load_from_disk(clean_dataset_path)
 
-    # FIXME remove this debug thing
-    # clean_dataset = clean_dataset.select(range(64))
 
     # creating token embeddings
     embeddings = clean_dataset.map(
@@ -108,13 +106,6 @@ if __name__ == '__main__':
     # saving to the disk
     embeddings.save_to_disk(embeddings_dataset_path)
 
-    # THE FOLLOWING CODE CRASHES. FOR NOW JUST DO EMBEDDINGS
-
-    # adding faiss index
-    # embeddings.add_faiss_index(column='embeddings')
-
-    # saving to the disk
-    # embeddings.save_to_disk(embeddings_dataset_path)
 
 
 
