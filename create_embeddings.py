@@ -5,8 +5,8 @@ Use the model to embed the tokens and save it to the final dataset
 from transformers import AutoTokenizer, AutoModel, BitsAndBytesConfig
 from datasets import load_from_disk
 from html_cleaner import clean_dataset_path
+from model import get_model, get_tokenizer, get_device
 import torch
-from tqdm.auto import tqdm
 
 # where to save the database
 embeddings_dataset_path = "stlawu-webpages-with-embeddings"
@@ -19,9 +19,12 @@ def cls_pooling(model_output):
     """
     return model_output.last_hidden_state[:, 0]
 
-def get_embeddings(text: str):
+def get_embeddings(text: str, model, tokenizer, device):
     """
     Get the embeddings from the text
+    :param device:
+    :param tokenizer:
+    :param model:
     :param text:
     :return:
     """
@@ -38,15 +41,18 @@ def get_embeddings(text: str):
         model_output = model(**encoded_input)
     return {'embeddings': cls_pooling(model_output)[0]}
 
-def batched_embeddings(rows):
+def batched_embeddings(rows, model, tokenizer, device):
     """
     Same as ``get_embeddings`` function, but used in batched mode for ``dataset.map()``
+    :param device:
+    :param tokenizer:
+    :param model:
     :param rows:
     :return:
     """
     embeds = []
     for i in range(len(rows['html_doc'])):
-        embeds.append(get_embeddings(rows['html_doc'][i])['embeddings'])
+        embeds.append(get_embeddings(rows['html_doc'][i], model, tokenizer, device)['embeddings'])
     return {'embeddings': embeds}
 
 
@@ -54,32 +60,14 @@ def batched_embeddings(rows):
 
 if __name__ == '__main__':
 
-    # getting device to use for calculations
-    if torch.cuda.is_available():
-        device = torch.device("cuda")
-        print("Using CUDA")
-    else:
-        device = torch.device("cpu")
-        print("Using CPU")
+
 
     print(torch.cuda.get_device_properties(0).total_memory / 1024 ** 3)
 
-    # Utilizing quantization due to limited GPU memory
-    quantization_config = BitsAndBytesConfig(
-        load_in_8bit=True
-    )
-
     # downloading and using the model
-    model_ckpt = "intfloat/e5-mistral-7b-instruct"
-    tokenizer = AutoTokenizer.from_pretrained(model_ckpt)
-    model = AutoModel.from_pretrained(
-        model_ckpt,
-        quantization_config=quantization_config,
-        device_map="auto"
-    )
-
-    # model tokens max length
-    model.max_seq_length = 2 * 4096
+    tokenizer = get_tokenizer()
+    model = get_model()
+    device = get_device()
 
     # loading model to device
     # NO NEED TO DO IT WITH bitsandbytes MODELS
@@ -95,12 +83,22 @@ if __name__ == '__main__':
         batched_embeddings,
         batched=True,
         batch_size=64,
+        fn_kwargs={
+            'model': model,
+            'tokenizer': tokenizer,
+            'device': device
+        }
     )
 
 
     # Old version
     # embeddings = clean_dataset.map(
-    #     lambda x: get_embeddings(x['html_doc'])
+    #     lambda x: get_embeddings(x['html_doc']),
+    #     fn_kwargs={
+    #         'model': model,
+    #         'tokenizer': tokenizer,
+    #         'device': device
+    #     }
     # )
 
     # saving to the disk

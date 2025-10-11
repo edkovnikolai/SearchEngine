@@ -4,5 +4,4 @@ stlawu-webpages.jsonl
 stlawu-webpages-clean
 stlawu-webpages-with-embeddings
 .ipynb_checkpoints
-*.out
-*.err
+.idea
